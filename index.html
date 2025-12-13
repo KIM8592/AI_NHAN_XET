@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Review App & Chatbot - Frontend Only</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <style>
+        /* --- CSS CHÍNH (APP NHẬN XÉT) --- */
+        body { font-family: Arial, sans-serif; margin: 0; background-color: #f4f7f6; display: flex; justify-content: center; }
+        .container { max-width: 1200px; width: 100%; margin: 20px; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .main-content { display: grid; grid-template-columns: 350px 1fr; gap: 20px; }
+        .control-panel { padding: 15px; border: 1px solid #ddd; border-radius: 4px; background-color: #e9ecef; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], input[type="file"], select, textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #007bff; color: white; padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; margin-right: 5px; }
+        button:hover { background-color: #0056b3; }
+        .review-button { background-color: #28a745; margin-top: 15px; padding: 10px 15px; font-size: 16px; width: 100%; }
+        .review-button:hover { background-color: #1e7e34; }
+        
+        /* Message Box */
+        .message-box { padding: 10px; margin-top: 15px; border-radius: 4px; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        
+        /* Bảng Excel */
+        .table-container { height: 70vh; overflow: auto; background: white; border: 1px solid #ddd; border-radius: 4px; }
+        .editable-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .editable-table th, .editable-table td { padding: 0; border: 1px solid #ddd; text-align: left; }
+        .editable-table th { background-color: #f2f2f2; position: sticky; top: 0; padding: 8px 10px; }
+        .editable-table input { width: 100%; box-sizing: border-box; border: none; padding: 5px; background: transparent; }
+        .editable-table tr:nth-child(odd) { background-color: #f9f9f9; }
+        
+        /* Progress */
+        .progress-bar { width: 100%; background-color: #f3f3f3; border-radius: 5px; margin-top: 10px; }
+        .progress { height: 20px; background-color: #007bff; border-radius: 5px; text-align: center; color: white; line-height: 20px; transition: width 0.4s ease; }
+        
+        /* --- CSS CHATBOT --- */
+        #chatbot-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 300px;
+            z-index: 1000;
+        }
+        #chat-button {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            transition: transform 0.3s;
+        }
+        #chat-window {
+            height: 400px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+        #chat-header {
+            background-color: #f44336;
+            color: white;
+            padding: 10px;
+            font-weight: bold;
+            text-align: center;
+        }
+        #chat-messages {
+            flex-grow: 1;
+            padding: 10px;
+            overflow-y: auto;
+            background-color: #fafafa;
+        }
+        .message {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 5px;
+            max-width: 80%;
+        }
+        .user-message {
+            background-color: #007bff;
+            color: white;
+            align-self: flex-end;
+            margin-left: auto;
+        }
+        .ai-message {
+            background-color: #e0e0e0;
+            color: #333;
+            align-self: flex-start;
+        }
+        #chat-input-container {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #ccc;
+        }
+        #chat-input {
+            flex-grow: 1;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin-right: 10px;
+        }
+        #chat-send-btn {
+            background-color: #f44336;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .hidden { display: none !important; } 
+    </style>
+</head>
+<body onload="loadInitialData()">
+    <div class="container">
+        <h1>🤖 AI Nhan xet & Chatbot</h1>
+        <div class="message-box warning">
+            <p><strong>CẢNH BÁO BẢO MẬT:</strong> API Key được sử dụng cho cả hai tính năng (nhận xét và chatbot) và được lưu trữ trong trình duyệt. **KHÔNG** sử dụng cho mục đích công khai.</p>
+        </div>
+        
+        <div id="message_area" class="message-box" style="display: none;"></div>
+        
+        <div class="main-content">
+            <div class="control-panel">
+                <h2>⚙️ Cấu Hình Nhận Xét</h2>
+                
+                <div class="form-group">
+                    <label for="api_key_input">🔑 Nhập Gemini API Key:</label>
+                    <input type="text" id="api_key_input" placeholder="Điền khóa API Gemini của bạn">
+                    <button onclick="saveApiKey()" style="margin-top: 5px; width: 100%; background-color: #008cba;">Lưu Key</button>
+                </div>
+                
+                <hr>
+
+                <div class="form-group">
+                    <label for="excel_file_input">📁 Tải File Excel Lên:</label>
+                    <input type="file" id="excel_file_input" accept=".xlsx, .xls" onchange="handleFileUpload()">
+                </div>
+                
+                <div class="form-group">
+                    <label for="column_name">🎯 Chọn Cột Mức Đạt/Dữ liệu:</label>
+                    <select id="column_name" name="column_name"></select>
+                </div>
+
+                <div class="form-group">
+                    <label for="prompt">📝 Yêu Cầu Nhận Xét (Prompt):</label>
+                    <textarea id="prompt" rows="5" placeholder="Ví dụ: Dựa trên mức đạt, viết một nhận xét ngắn gọn, chuyên nghiệp và gợi ý hướng phát triển tiếp theo."></textarea>
+                </div>
+                
+                <button onclick="startReview()" class="review-button" id="review_btn" disabled>✨ Bắt Đầu Nhận Xét AI</button>
+                
+                <div id="progress_area" style="margin-top: 15px; font-size: 14px; color: #007bff; display: none;">
+                    <p>Tiến trình: <span id="progress_status">0/0</span></p>
+                    <div class="progress-bar"><div id="progress_bar_fill" class="progress" style="width: 0%;"></div></div>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <button onclick="exportExcel()" style="background-color: green; width: 100%;" id="export_btn" disabled>⬇️ Xuất File Excel Đã Nhận Xét</button>
+                </div>
+            </div>
+
+            <div class="data-view">
+                <div style="margin-bottom: 10px;">
+                    <button onclick="addRow()" style="background-color: #008cba;">➕ Thêm dòng</button>
+                    <button onclick="deleteLastRow()" style="background-color: #f44336;">➖ Xóa dòng cuối</button>
+                </div>
+
+                <div id="data_preview" class="table-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="chatbot-container">
+        <div id="chat-window" class="hidden">
+            <div id="chat-header">Trợ lý Ảo AI</div>
+            <div id="chat-messages">
+                <div class="message ai-message">Chào bạn! Tôi là trợ lý AI. Hỏi tôi bất cứ điều gì liên quan đến công việc của bạn.</div>
+            </div>
+            <div id="chat-input-container">
+                <input type="text" id="chat-input" placeholder="Nhập tin nhắn..." onkeydown="if(event.key==='Enter') sendChatMessage()">
+                <button id="chat-send-btn" onclick="sendChatMessage()">Gửi</button>
+            </div>
+        </div>
+        <button id="chat-button" onclick="toggleChatWindow()">💬</button>
+    </div>
+
+    <script>
+        let currentData = [];
+        const REVIEW_COL_NAME = 'Nhan_xet_cu';
+        let currentColumns = ['STT', 'Ho_va_Ten', 'Muc_Dat', REVIEW_COL_NAME];
+        let apiKey = localStorage.getItem('geminiApiKey');
+        let isReviewing = false;
+        const GEMINI_MODEL = 'gemini-2.5-flash';
+        let chatHistory = [];
+
+        const LEVEL_MAPPING = { 'T':'Hoàn thành Tốt','H':'Hoàn thành','C':'Chưa Hoàn thành','t':'Hoàn thành Tốt','h':'Hoàn thành','c':'Chưa Hoàn thành' };
+
+        // CHATBOT
+        function toggleChatWindow() {
+            const chatWindow = document.getElementById('chat-window');
+            const chatButton = document.getElementById('chat-button');
+            chatWindow.classList.toggle('hidden');
+            chatButton.textContent = chatWindow.classList.contains('hidden') ? '💬' : '✖';
+            if (!chatWindow.classList.contains('hidden')) document.getElementById('chat-input').focus();
+        }
+
+        function appendMessage(sender,text){
+            const messagesDiv = document.getElementById('chat-messages');
+            const msgDiv = document.createElement('div');
+            msgDiv.classList.add('message', sender==='user'?'user-message':'ai-message');
+            msgDiv.innerHTML = text.replace(/\n/g,'<br>');
+            messagesDiv.appendChild(msgDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        async function sendChatMessage(){
+            const input = document.getElementById('chat-input');
+            const userMsg = input.value.trim();
+            if(!apiKey){ appendMessage('ai','🚫 Vui lòng nhập và lưu API Key.'); return; }
+            if(!userMsg) return;
+            appendMessage('user',userMsg);
+            input.value=''; chatHistory.push({role:"user",parts:[{text:userMsg}]});
+            try{
+                const payload = { contents: chatHistory, generationConfig:{temperature:0.8} };
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,{
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify(payload)
+                });
+                if(!res.ok){
+                    const errJson=await res.json();
+                    appendMessage('ai',`LỖI CHAT API: ${res.status} - ${errJson.error?.message||'Lỗi không xác định'}`);
+                } else {
+                    const json = await res.json();
+                    const aiText = json.candidates?.[0]?.content?.parts?.[0]?.text||'Không nhận được phản hồi.';
+                    appendMessage('ai',aiText);
+                    chatHistory.push({role:"model",parts:[{text:aiText}]});
+                }
+            } catch(e){ appendMessage('ai',`LỖI KẾT NỐI: ${e.message}`);}
+        }
+
+        // UI
+        function showMessage(type,msg){ const area=document.getElementById('message_area'); area.className='message-box '+type; area.innerHTML=msg; area.style.display='block'; }
+        function toggleReviewButton(enabled){ const btn=document.getElementById('review_btn'); btn.disabled=!enabled; btn.textContent=enabled?'✨ Bắt Đầu Nhận Xét AI':'Đang xử lý...'; }
+        function updateProgress(cur,total){ document.getElementById('progress_area').style.display='block'; document.getElementById('progress_status').textContent=`${cur}/${total}`; document.getElementById('progress_bar_fill').style.width=`${(cur/total)*100}%`; }
+        function fillColumnNames(cols){ const sel=document.getElementById('column_name'); sel.innerHTML=''; currentColumns=cols; if(!cols.includes(REVIEW_COL_NAME)) currentColumns.push(REVIEW_COL_NAME); Array.from(new Set(currentColumns)).forEach(c=>{ const opt=document.createElement('option'); opt.value=c; opt.textContent=c; sel.appendChild(opt); }); if(cols.includes('Muc_Dat')) sel.value='Muc_Dat'; }
+        function updateData(el){ const r=parseInt(el.getAttribute('data-row-index')),c=el.getAttribute('data-col-name'),v=el.value; if(currentData[r]) currentData[r][c]=v; }
+        function renderEditableTable(){ if(currentColumns.length===0){ document.getElementById('data_preview').innerHTML='<p style="text-align:center;">Không có cột dữ liệu.</p>'; return;} let t='<table class="editable-table"><thead><tr>'; Array.from(new Set(currentColumns)).forEach(c=>t+=`<th>${c}</th>`); t+='</tr></thead><tbody>'; currentData.forEach((r,i)=>{ t+='<tr>'; currentColumns.forEach(c=>{ const val=r[c]!==null&&r[c]!==undefined?r[c]:''; const style=c===REVIEW_COL_NAME?'background-color:#f0fff0;':''; t+=`<td><input type="text" value="${val}" data-row-index="${i}" data-col-name="${c}" onchange="updateData(this)" style="${style}"/></td>`; }); t+='</tr>'; }); t+='</tbody></table>'; document.getElementById('data_preview').innerHTML=t; }
+
+        function loadInitialData(){
+            if(apiKey){ document.getElementById('api_key_input').value=apiKey; showMessage('success','API Key đã được tải từ bộ nhớ.'); toggleReviewButton(true);}
+            else{ showMessage('warning','Vui lòng nhập và lưu API Key trước khi bắt đầu.'); toggleReviewButton(false);}
+            currentData=[]; for(let i=0;i<5;i++){ let r={}; currentColumns.forEach(c=>r[c]=(c==='STT'?i+1:null)); currentData.push(r);}
+            fillColumnNames(currentColumns); renderEditableTable();
+        }
+
+        function saveApiKey(){
+            const key=document.getElementById('api_key_input').value.trim();
+            if(key){ localStorage.setItem('geminiApiKey',key); apiKey=key; showMessage('success','API Key đã lưu.'); toggleReviewButton(true); chatHistory=[]; document.getElementById('chat-messages').innerHTML='<div class="message ai-message">Chào bạn! Tôi là trợ lý AI. Hỏi tôi bất cứ điều gì.</div>';}
+            else{ showMessage('error','Vui lòng nhập Key hợp lệ.'); toggleReviewButton(false); apiKey=null; }
+        }
+
+        function handleFileUpload(){
+            const file=document.getElementById('excel_file_input').files[0];
+            if(!file) return;
+            showMessage('message-box','Đang đọc file...');
+            const reader=new FileReader();
+            reader.onload=function(e){
+                const data=new Uint8Array(e.target.result);
+                const workbook=XLSX.read(data,{type:'array'});
+                const sheetName=workbook.SheetNames[0];
+                const worksheet=workbook.Sheets[sheetName];
+                const jsonArr=XLSX.utils.sheet_to_json(worksheet,{header:1});
+                if(jsonArr.length<2){ showMessage('error','File Excel không có header và dữ liệu.'); return;}
+                const header=jsonArr[0].map(h=>String(h).trim().replace(/\s/g,'_'));
+                currentColumns=header;
+                currentData=jsonArr.slice(1).map(row=>{ let o={}; header.forEach((c,i)=>{ o[c]=row[i]!==undefined?row[i]:null; }); return o; });
+                fillColumnNames(currentColumns); renderEditableTable();
+                showMessage('success','File Excel đã tải lên thành công.');
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function addRow(){ let newRow={}; currentColumns.forEach(c=>newRow[c]=''); currentData.push(newRow); renderEditableTable();}
+        function deleteLastRow(){ if(currentData.length>0) currentData.pop(); renderEditableTable(); }
+
+        function mapLevel(val){ return LEVEL_MAPPING[val]||val||''; }
+
+        async function callGemini(dp,prompt){
+            const mapped=mapLevel(dp);
+            const fullPrompt=`Bạn là chuyên gia đánh giá. Dữ liệu đầu vào: **${mapped}**. Yêu cầu: ${prompt}`;
+            const payload={ contents:[{role:"user",parts:[{text:fullPrompt}]}], generationConfig:{temperature:0.7} };
+            try{
+                const url=`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+                const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+                if(!res.ok){ const errJson=await res.json(); return `LỖI API: ${res.status} - ${errJson.error?.message||'Lỗi không xác định'}`;}
+                const json=await res.json();
+                return json.candidates?.[0]?.content?.parts?.[0]?.text?.trim()||'Không nhận được nội dung phản hồi.';
+            } catch(e){ return `LỖI KẾT NỐI: ${e.message}`;}
+        }
+
+        async function startReview(){
+            if(!apiKey){ showMessage('error','Vui lòng nhập API Key trước.'); return;}
+            if(currentData.length===0){ showMessage('warning','Không có dữ liệu để nhận xét.'); return;}
+            const prompt=document.getElementById('prompt').value.trim();
+            if(!prompt){ showMessage('warning','Vui lòng nhập prompt.'); return;}
+            
+            toggleReviewButton(false); 
+            showMessage('message-box','Đang nhận xét...'); 
+            isReviewing=true;
+            
+            let totalToReview = currentData.filter(r => r['Ho_va_Ten'] && r['Muc_Dat'] && !r[REVIEW_COL_NAME]).length;
+            let count = 0;
+
+            for(let i=0;i<currentData.length;i++){
+                const row = currentData[i];
+                if(!row['Ho_va_Ten'] || !row['Muc_Dat'] || row[REVIEW_COL_NAME]) continue;
+                const dp = row['Muc_Dat']||'';
+                const review = await callGemini(dp, prompt);
+                row[REVIEW_COL_NAME] = review;
+                count++;
+                updateProgress(count, totalToReview);
+            }
+
+            isReviewing=false;
+            toggleReviewButton(true); 
+            renderEditableTable();
+            document.getElementById('export_btn').disabled=false;
+            showMessage('success','Đã hoàn tất nhận xét cho tất cả học sinh.');
+        }
+
+        function exportExcel(){
+            if(currentData.length===0){ showMessage('warning','Không có dữ liệu để xuất.'); return;}
+            const ws=XLSX.utils.json_to_sheet(currentData);
+            const wb=XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb,ws,'Nhan_xet');
+            XLSX.writeFile(wb,'Nhan_xet_AI.xlsx');
+            showMessage('success','File đã xuất thành công.');
+        }
+    </script>
+</body>
+</html>
