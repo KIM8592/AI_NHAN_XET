@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TRƯỜNG TIỂU HỌC KHÁNH BÌNH - Standalone</title>
+
+  <!-- Tailwind (CDN, for the original utility classes) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React / ReactDOM UMD builds -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+  <!-- Babel to allow JSX in the browser (development only) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Firebase (compat builds so we can use similar APIs without bundling) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+
+  <!-- xlsx library for Excel export (loaded again inside the app async too) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    /* Ensure monospace fallback for table-fixed elements used with tailwind classes */
+    body { -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+  </style>
+</head>
+<body class="bg-[#F8FAFC] font-sans">
+  <div id="root"></div>
+
+  <!-- Main app (JSX transpiled by Babel in the browser) -->
+  <script type="text/babel">
+
+    /*****************************************************************************
+     * NOTE:
+     * - Preserved original behavior and layout.
+     * - Settings (⚙️) now accept 5 API keys (gstudio_api_key_1 .. _5).
+     * - The app will rotate through those keys when calling the Studio API;
+     *   when a key fails it moves to the next key and continues rotating.
+     * - Removed the small muted hint near the note input as requested.
+     * - Editable note cells remain textarea and allow Enter for new lines.
+     *****************************************************************************/
+
+    const { useState, useEffect, useRef } = React;
+
+    // ---------- Minimal "icon" components (emoji-based placeholders) ----------
+    const makeEmojiIcon = (emoji) => ({ size = 16, className = "" }) => (
+      <span style={{ fontSize: size }} className={className} aria-hidden>{emoji}</span>
+    );
+
+    const Plus = makeEmojiIcon('➕');
+    const Trash2 = makeEmojiIcon('🗑️');
+    const LayoutGrid = makeEmojiIcon('🧩');
+    const Calendar = makeEmojiIcon('📅');
+    const BookOpen = makeEmojiIcon('📖');
+    const UserPlus = makeEmojiIcon('👤➕');
+    const Sparkles = makeEmojiIcon('✨');
+    const X = makeEmojiIcon('❌');
+    const Loader2 = makeEmojiIcon('⏳');
+    const Wand2 = makeEmojiIcon('🪄');
+    const GraduationCap = makeEmojiIcon('🎓');
+    const Edit2 = makeEmojiIcon('✏️');
+    const Eye = makeEmojiIcon('👁️');
+    const EyeOff = makeEmojiIcon('🙈');
+    const Download = makeEmojiIcon('⬇️');
+    const ShieldAlert = makeEmojiIcon('🛡️');
+    const CheckCircle2 = makeEmojiIcon('✅');
+    const User = makeEmojiIcon('👤');
+    const Star = makeEmojiIcon('⭐');
+    const Settings = makeEmojiIcon('⚙️');
+
+    // ---------- Zalo SVG icon kept inline ----------
+    const ZaloIcon = ({ size = 16, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M22.507 11.23c-.156-.464-.34-.916-.548-1.353-.207-.436-.45-.858-.72-1.26a10.023 10.023 0 0 0-1.077-1.378 10.662 10.662 0 0 0-1.428-1.265 11.996 11.996 0 0 0-1.742-1.082A13.437 13.437 0 0 0 14.885 4.1a14.897 14.897 0 0 0-2.264-.474c-.38-.046-.763-.075-1.147-.087-.384-.012-.767-.008-1.15.012-.383.02-.764.055-1.145.105-.38.05-.758.115-1.134.195a14.864 14.864 0 0 0-2.22.65c-.358.13-.71.277-1.054.44a11.905 11.905 0 0 0-1.928 1.157 10.323 10.323 0 0 0-1.547 1.455c-.23.272-.44.558-.626.858a9.146 9.146 0 0 0-.825 2.022 8.79 8.79 0 0 0-.256 2.115c.01.353.04.706.087 1.055.048.35.114.697.198 1.04.084.343.187.68.307 1.01.12.33.256.654.407.97.15.316.315.626.494.927.18.3.37.593.578.877.207.284.426.56.654.825l-.578 2.316c-.052.207-.063.424-.032.636.03.21.096.413.195.6a1.442 1.442 0 0 0 .61.624c.24.13.51.196.78.196a1.517 1.517 0 0 0 .584-.117l3.522-1.507c.394.135.795.247 1.202.333.407.086.82.147 1.236.183.416.036.834.048 1.253.036.418-.012.836-.048 1.25-.108a14.892 14.892 0 0 0 2.417-.63 12.01 12.01 0 0 0 2.15-1.045 10.323 10.323 0 0 0 1.763-1.42 9.074 9.074 0 0 0 1.233-1.69 8.72 8.72 0 0 0 .864-2.128 9.052 9.052 0 0 0 .04-2.227z" />
+      </svg>
+    );
+
+    // ---------- App config (kept as original) ----------
+    const myFirebaseConfig = {
+      apiKey: "AIzaSyCuomTR3xRgkk4YLCvc7bCKR2chx--AxvA",
+      authDomain: "th-khanh-binh-manager.firebaseapp.com",
+      projectId: "th-khanh-binh-manager",
+      storageBucket: "th-khanh-binh-manager.firebasestorage.app",
+      messagingSenderId: "772130590846",
+      appId: "1:772130590846:web:108a05c64e2c5083ce882f"
+    };
+
+    const firebaseConfig = (myFirebaseConfig.apiKey !== "AIzaSy...")
+      ? myFirebaseConfig
+      : (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : myFirebaseConfig);
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    const appId = 'th-khanh-binh-manager';
+
+    const AUTHOR_NAME = "Trần Trọng Kim";
+    const AUTHOR_PHONE = "0964567806";
+
+    const SPECIFIC_COMPETENCIES = [
+      { id: 'lang', name: 'Ngôn ngữ', prompt: 'Đọc lưu loát, diễn cảm, hiểu nội dung. Nói mạch lạc, dùng từ phong phú. Viết đúng chính tả, sạch đẹp. Tự tin trình bày.' },
+      { id: 'math', name: 'Tính toán', prompt: 'Thực hiện tốt các phép tính cộng trừ nhân chia. Vận dụng kiến thức vào thực tế. Nhận biết nhanh mô hình toán học. Cẩn thận, chính xác.' },
+      { id: 'sci', name: 'Khoa học', prompt: 'Quan sát tốt thế giới tự nhiên. Nêu biện pháp bảo vệ sức khoẻ, môi trường. Biết đặt câu hỏi về sự vật hiện tượng.' },
+      { id: 'tech', name: 'Công nghệ', prompt: 'Sử dụng bộ đồ dùng học tập hiệu quả. Biết dùng thiết bị đơn giản. Ứng dụng kiến thức vào giải quyết nhiệm vụ.' },
+      { id: 'it', name: 'Tin học', prompt: 'Sử dụng thiết bị số cơ bản. Thu thập thông tin qua hình ảnh/gợi ý. Có ý thức bảo quản thiết bị.' },
+      { id: 'art', name: 'Thẩm mĩ', prompt: 'Cảm nhận vẻ đẹp âm nhạc, hội họa. Chọn màu sắc hài hòa. Diễn đạt cảm xúc qua nghệ thuật.' },
+      { id: 'phys', name: 'Thể chất', prompt: 'Tự giác tập luyện. tích cực tham gia trò chơi. Tham gia hoạt động phù hợp bản thân.' }
+    ];
+
+    const SUBJECT_TO_COMPETENCY_MAP = {
+      'Tiếng Việt': 'lang',
+      'Toán': 'math',
+      'Khoa học': 'sci',
+      'Tự nhiên và Xã hội': 'sci',
+      'Công nghệ': 'tech',
+      'Tin học': 'it',
+      'Mĩ thuật': 'art',
+      'Giáo dục Thể chất': 'phys'
+    };
+
+    // ---------- EditableCell component (kept unchanged logic) ----------
+    const EditableCell = ({ value, onSave, placeholder, className }) => {
+      const [localValue, setLocalValue] = useState(value || '');
+      const textareaRef = useRef(null);
+      const timeoutRef = useRef(null);
+
+      const adjustHeight = () => {
+        const textarea = textareaRef.current;
+        if (textarea) {
+          textarea.style.height = 'auto';
+          textarea.style.height = textarea.scrollHeight + 'px';
+        }
+      };
+
+      useEffect(() => {
+        setLocalValue(value || '');
+        setTimeout(adjustHeight, 0);
+      }, [value]);
+
+      const handleChange = (e) => {
+        const newVal = e.target.value;
+        setLocalValue(newVal);
+        adjustHeight();
+
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = setTimeout(() => {
+          onSave(newVal);
+        }, 800);
+      };
+
+      return (
+        <textarea
+          ref={textareaRef}
+          className={`${className} overflow-hidden whitespace-pre-wrap break-words`}
+          rows={1}
+          value={localValue}
+          onChange={handleChange}
+          placeholder={placeholder}
+        />
+      );
+    };
+
+    // ---------- Helper: convenience functions to build compat paths ----------
+    const rootArtifacts = () => db.collection('artifacts').doc(appId).collection('public').doc('data');
+    const colYears = () => rootArtifacts().collection('years');
+    const colClasses = () => rootArtifacts().collection('classes');
+    const colMonths = () => rootArtifacts().collection('months');
+    const colSubjects = () => rootArtifacts().collection('subjects');
+    const colCommentsForKey = (key) => rootArtifacts().collection('comments').doc(key).collection('entries');
+    const colStudents = (yearId, classId) => rootArtifacts().collection('years').doc(yearId).collection('classes').doc(classId).collection('students');
+
+    // ---------- Small utility: sleep(ms) to pause between requests ----------
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    // ---------- The main App ----------
+    const App = () => {
+      const [user, setUser] = useState(null);
+      const [years, setYears] = useState([]);
+      const [classes, setClasses] = useState([]);
+      const [months, setMonths] = useState([]);
+      const [subjects, setSubjects] = useState([]);
+      const [students, setStudents] = useState([]);
+      const [studentData, setStudentData] = useState({});
+
+      const [selectedYearId, setSelectedYearId] = useState('');
+      const [selectedClassId, setSelectedClassId] = useState('');
+      const [selectedMonthId, setSelectedMonthId] = useState('');
+      const [selectedSubId, setSelectedSubId] = useState('');
+
+      const [viewMode, setViewMode] = useState('subject');
+      const [showLevel, setShowLevel] = useState(true);
+      const [showNote, setShowNote] = useState(true);
+
+      const [modalType, setModalType] = useState(null);
+      const [confirmDelete, setConfirmDelete] = useState(null);
+      const [editItem, setEditItem] = useState(null);
+      const [inputValue, setInputValue] = useState('');
+      const [bulkInput, setBulkInput] = useState('');
+      const [aiPrompt, setAiPrompt] = useState('');
+      const [isGenerating, setIsGenerating] = useState(false);
+      const [copySuccess, setCopySuccess] = useState(null);
+      const [isAuthValid, setIsAuthValid] = useState(true);
+
+      // New states: five studio API keys inside Settings; no main key input shown in UI anymore
+      const [settingsOpen, setSettingsOpen] = useState(false);
+      const [gApiKey1, setGApiKey1] = useState('');
+      const [gApiKey2, setGApiKey2] = useState('');
+      const [gApiKey3, setGApiKey3] = useState('');
+      const [gApiKey4, setGApiKey4] = useState('');
+      const [gApiKey5, setGApiKey5] = useState('');
+      const [showKey1, setShowKey1] = useState(false);
+      const [showKey2, setShowKey2] = useState(false);
+      const [showKey3, setShowKey3] = useState(false);
+      const [showKey4, setShowKey4] = useState(false);
+      const [showKey5, setShowKey5] = useState(false);
+
+      const [apiError, setApiError] = useState('');
+
+      // load xlsx lib asynchronously (already loaded above but keep this to mirror original behavior)
+      useEffect(() => {
+        if (typeof window.XLSX === 'undefined') {
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+          script.async = true;
+          document.body.appendChild(script);
+        }
+      }, []);
+
+      // local auth check (same as original)
+      useEffect(() => {
+        const _v = (s) => btoa(unescape(encodeURIComponent(s)));
+        if (_v(AUTHOR_NAME) !== "VHLhuqduIFRy4buNbmcgS2lt" || _v(AUTHOR_PHONE) !== "MDk2NDU2NzgwNg==") {
+          setIsAuthValid(false);
+        }
+      }, []);
+
+      // Initialize auth (anonymous or custom token if provided)
+      useEffect(() => {
+        const initAuth = async () => {
+          try {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+              await auth.signInWithCustomToken(__initial_auth_token);
+            } else {
+              await auth.signInAnonymously();
+            }
+          } catch (err) {
+            await auth.signInAnonymously();
+          }
+        };
+        initAuth();
+        const unregister = auth.onAuthStateChanged((u) => setUser(u));
+        return () => unregister && unregister();
+      }, []);
+
+      // load saved API keys from localStorage on mount
+      useEffect(() => {
+        try {
+          const k1 = localStorage.getItem('gstudio_api_key_1') || '';
+          const k2 = localStorage.getItem('gstudio_api_key_2') || '';
+          const k3 = localStorage.getItem('gstudio_api_key_3') || '';
+          const k4 = localStorage.getItem('gstudio_api_key_4') || '';
+          const k5 = localStorage.getItem('gstudio_api_key_5') || '';
+          if (k1) setGApiKey1(k1);
+          if (k2) setGApiKey2(k2);
+          if (k3) setGApiKey3(k3);
+          if (k4) setGApiKey4(k4);
+          if (k5) setGApiKey5(k5);
+        } catch (e) {
+          // ignore localStorage errors
+        }
+      }, []);
+
+      // auto-save the five keys to localStorage when they change
+      useEffect(() => {
+        try {
+          if (gApiKey1) localStorage.setItem('gstudio_api_key_1', gApiKey1); else localStorage.removeItem('gstudio_api_key_1');
+          if (gApiKey2) localStorage.setItem('gstudio_api_key_2', gApiKey2); else localStorage.removeItem('gstudio_api_key_2');
+          if (gApiKey3) localStorage.setItem('gstudio_api_key_3', gApiKey3); else localStorage.removeItem('gstudio_api_key_3');
+          if (gApiKey4) localStorage.setItem('gstudio_api_key_4', gApiKey4); else localStorage.removeItem('gstudio_api_key_4');
+          if (gApiKey5) localStorage.setItem('gstudio_api_key_5', gApiKey5); else localStorage.removeItem('gstudio_api_key_5');
+        } catch (e) {
+          // ignore localStorage errors
+        }
+      }, [gApiKey1, gApiKey2, gApiKey3, gApiKey4, gApiKey5]);
+
+      // Clear API error when user edits the keys or prompt or selection
+      useEffect(() => { setApiError(''); }, [gApiKey1, gApiKey2, gApiKey3, gApiKey4, gApiKey5, aiPrompt, selectedYearId, selectedClassId, selectedMonthId, selectedSubId, viewMode]);
+
+      // Listen to master data lists
+      useEffect(() => {
+        if (!user || !isAuthValid) return;
+        const unsubYears = colYears().onSnapshot(s => {
+          setYears(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+        });
+        const unsubCla = colClasses().onSnapshot(s => {
+          setClasses(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.name.localeCompare(b.name, 'vi', { numeric: true })));
+        });
+        const unsubMon = colMonths().onSnapshot(s => {
+          setMonths(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+        });
+        const unsubSub = colSubjects().onSnapshot(s => {
+          setSubjects(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.name.localeCompare(b.name, 'vi')));
+        });
+        return () => { unsubYears && unsubYears(); unsubCla && unsubCla(); unsubMon && unsubMon(); unsubSub && unsubSub(); };
+      }, [user, isAuthValid]);
+
+      // Students list
+      useEffect(() => {
+        if (!user || !selectedClassId || !selectedYearId || !isAuthValid) { setStudents([]); return; }
+        const q = colStudents(selectedYearId, selectedClassId);
+        const unsub = q.onSnapshot((snap) => {
+          setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0)));
+        });
+        return () => unsub && unsub();
+      }, [user, selectedClassId, selectedYearId, isAuthValid]);
+
+      // Student data (comments / levels)
+      useEffect(() => {
+        if (!user || !selectedMonthId || !selectedClassId || !selectedYearId || !isAuthValid) { setStudentData({}); return; }
+        if (viewMode === 'subject' && !selectedSubId) { setStudentData({}); return; }
+        const key = viewMode === 'subject' ? `${selectedYearId}_${selectedSubId}_${selectedMonthId}_${selectedClassId}` : `${selectedYearId}_${viewMode}_${selectedMonthId}_${selectedClassId}`;
+        const q = colCommentsForKey(key);
+        const unsub = q.onSnapshot((snap) => {
+          const data = {};
+          snap.forEach(doc => { data[doc.id] = doc.data(); });
+          setStudentData(data);
+        });
+        return () => unsub && unsub();
+      }, [user, selectedSubId, selectedMonthId, selectedClassId, selectedYearId, viewMode, isAuthValid]);
+
+      // Update a single cell (set / toggle levels). Uses compat APIs.
+      const updateCell = async (studentId, field, value) => {
+        if (!user || !isAuthValid) return;
+        const key = viewMode === 'subject' ? `${selectedYearId}_${selectedSubId}_${selectedMonthId}_${selectedClassId}` : `${selectedYearId}_${viewMode}_${selectedMonthId}_${selectedClassId}`;
+        const docRef = colCommentsForKey(key).doc(studentId);
+
+        let finalValue = value;
+        if (field.startsWith('level')) {
+          const currentData = studentData[studentId];
+          if (currentData && currentData[field] === value) {
+            finalValue = "";
+          }
+        }
+
+        await docRef.set({ [field]: finalValue }, { merge: true });
+
+        if (viewMode === 'subject' && field === 'level') {
+          const subjectName = subjects.find(s => s.id === selectedSubId)?.name;
+          const targetCompId = SUBJECT_TO_COMPETENCY_MAP[subjectName];
+          if (targetCompId) {
+            const compLevelValue = (finalValue === 'H') ? 'Đ' : finalValue;
+            const compKey = `${selectedYearId}_specific_${selectedMonthId}_${selectedClassId}`;
+            const compDocRef = colCommentsForKey(compKey).doc(studentId);
+            await compDocRef.set({ [`level_${targetCompId}`]: compLevelValue }, { merge: true });
+          }
+        }
+      };
+
+      // Helper: build keys array (non-empty) from 5 keys
+      const getAvailableKeys = () => {
+        return [gApiKey1, gApiKey2, gApiKey3, gApiKey4, gApiKey5].map(k => (k || '').trim()).filter(k => k);
+      };
+
+      // Helper to attempt one generation call with a given key
+      const callStudio = async (key, userPrompt, systemPrompt) => {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${key}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: userPrompt }] }],
+            systemInstruction: { parts: [{ text: systemPrompt }] }
+          })
+        });
+
+        if (!res.ok) {
+          const txt = await res.text().catch(() => '');
+          const err = new Error(`HTTP ${res.status} ${res.statusText}${txt ? `: ${txt}` : ''}`);
+          err.status = res.status;
+          throw err;
+        }
+
+        const result = await res.json().catch(() => null);
+        const text = result?.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.replace(/[*\-#"']/g, '');
+        if (!text) throw new Error('API trả về kết quả rỗng hoặc không đúng định dạng.');
+        return text;
+      };
+
+      // Run AI: use the five keys from settings and rotate between them on failure
+      const runAI = async () => {
+        if (!isAuthValid) return;
+        setApiError('');
+
+        const targets = students.filter(s => {
+          const d = studentData[s.id] || {};
+          if (viewMode === 'specific') return SPECIFIC_COMPETENCIES.some(c => d[`level_${c.id}`]) && !d.comment;
+          return d.level && !d.comment;
+        });
+
+        if (!targets.length) return;
+
+        const keys = getAvailableKeys();
+        if (!keys.length) {
+          setApiError('Vui lòng cấu hình ít nhất 1 API key trong Cài đặt (⚙️).');
+          return;
+        }
+
+        setIsGenerating(true);
+
+        // We'll maintain a rotating index across students in this run
+        let currentKeyIndex = 0;
+
+        for (const stu of targets) {
+          const data = studentData[stu.id] || {};
+          let systemPrompt = "";
+          let contextInfo = "";
+
+          if (viewMode === 'subject') {
+            systemPrompt = `Bạn là GV Tiểu học. Viết nhận xét Môn học. Quy tắc: Bắt đầu bằng 'Em'. Dài 20 từ. 
+            - Mức T (Tốt): Khen ngợi thành tích.
+            - Mức H (Hoàn thành): Khen nhẹ, nêu hướng phát huy. 
+            - Mức C (Chưa hoàn thành): Khen khích lệ, nêu hạn chế cụ thể và hướng khắc phục.
+            - Không dùng từ hoàn thành tốt đối với Mức H (hoàn thành).`;
+            contextInfo = `Môn: ${subjects.find(s=>s.id===selectedSubId)?.name}. Mức: ${data.level}.`;
+          } else if (viewMode === 'competency' || viewMode === 'quality') {
+            systemPrompt = `Bạn là GV Tiểu học. Viết nhận xét ${viewMode === 'competency' ? 'Năng lực' : 'Phẩm chất'}. Quy tắc: Bắt đầu bằng 'Em'. Dài khoảng 30 từ.
+            - Mức T (Tốt): Khen ngợi.
+            - Mức Đ (Đạt): Khen nhẹ, hướng phát huy.
+            - Mức C (Cần cố gắng): Khen khích lệ, nêu hạn chế và hướng khắc phục.`;
+            contextInfo = `Mức: ${data.level}.`;
+          } else if (viewMode === 'specific') {
+            systemPrompt = `Bạn là GV Tiểu học. Viết nhận xét Năng lực đặc thù tổng hợp. Quy tắc: Bắt đầu bằng 'Em'. Dài khoảng 35-40 từ. 
+            Dựa vào mức độ T/Đ/C của các phân môn để viết câu nhận xét MỚI.
+            KHÔNG liệt kê tên năng lực. 
+            - Nếu có T: Khen sự nổi trội ở các lĩnh vực đó. 
+            - Nếu có Đ: Ghi nhận sự nỗ lực, khuyến khích phát huy thêm.
+            - Nếu có C: Khen khích lệ và chỉ rõ cần rèn luyện thêm lĩnh vực nào để khắc phục.
+            - Bắt buộc không lặp lại tên các năng lực.
+            - Bắt buộc dùng từ liên quan đến tiểu học, không dùng từ cao siêu.
+            - Bắt buộc ghi nội dung việc làm cụ thể của học sinh qua các năng lực.`;
+
+            const details = SPECIFIC_COMPETENCIES.map(c => {
+              const lv = data[`level_${c.id}`];
+              return lv ? `${c.name} (${lv}): ${c.prompt}` : null;
+            }).filter(Boolean).join('. ');
+            contextInfo = `Dữ liệu phân môn: ${details}`;
+          }
+
+          const userPrompt = `${contextInfo}. Lưu ý: ${aiPrompt}. Ghi chú riêng: ${data.note || 'Không'}.`;
+
+          // Try keys in rotation until one succeeds for this student
+          let generated = null;
+          let tried = 0;
+          const maxTries = keys.length;
+          while (tried < maxTries && !generated) {
+            const key = keys[currentKeyIndex];
+            try {
+              generated = await callStudio(key, userPrompt, systemPrompt);
+              // success: keep currentKeyIndex (so next student tries same key first)
+            } catch (err) {
+              // on any error, rotate to next key and try again
+              tried++;
+              currentKeyIndex = (currentKeyIndex + 1) % keys.length;
+              // if we've tried all keys and none worked, set error and break outer loop
+              if (tried >= maxTries && !generated) {
+                setApiError(`Tất cả API key thử nghiệm đều thất bại khi gọi AI cho học sinh ${stu.name}: ${err.message || 'Không rõ lỗi'}`);
+              }
+            }
+          }
+
+          if (!generated) {
+            // stop processing further students on complete key exhaustion
+            console.error('Không thể tạo nhận xét cho', stu.name);
+            break;
+          }
+
+          // Only write after successful generation
+          try {
+            await updateCell(stu.id, 'comment', generated);
+          } catch (e) {
+            setApiError(`Lỗi khi lưu nhận xét cho ${stu.name}: ${e.message || 'Không rõ lỗi'}`);
+            break;
+          }
+
+          // Pause 10 seconds to reduce token usage rate / API pressure
+          await sleep(10000);
+        }
+
+        setIsGenerating(false);
+      };
+
+      // Copy & open Zalo chat (identical behavior)
+      const handleSendZalo = (studentId) => {
+        if (!isAuthValid) return;
+        const stu = students.find(s => s.id === studentId);
+        const data = studentData[studentId] || {};
+        if (!stu || !data?.comment) return;
+        const subName = viewMode === 'subject' ? subjects.find(s => s.id === selectedSubId)?.name : (viewMode === 'competency' ? 'Năng lực' : (viewMode === 'quality' ? 'Phẩm chất' : 'Năng lực đặc thù'));
+        const message = `✨ TRƯỜNG TIỂU HỌC KHÁNH BÌNH ✨\n💌 THƯ KHEN GỬI GIA ĐÌNH EM: ${stu.name.toUpperCase()}\n---------------------------\n🌈 Lớp: ${classes.find(c=>c.id===selectedClassId)?.name}\n📘 Nội dung: ${subName} (${months.find(m=>m.id===selectedMonthId)?.name})\n\n📝 Nhận xét:\n"${data.comment}"\n\n❤️ Chúc con luôn chăm ngoan!`;
+        const el = document.createElement('textarea'); el.value = message; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
+        setCopySuccess(studentId); setTimeout(() => setCopySuccess(null), 2000); window.open('https://chat.zalo.me/', '_blank');
+      };
+
+      // Export to Excel using XLSX from CDN (keeps original format)
+      const exportExcel = () => {
+        if (!students.length || !window.XLSX) return;
+        const className = classes.find(c => c.id === selectedClassId)?.name || 'Lớp';
+        const monthName = months.find(m => m.id === selectedMonthId)?.name || 'Tháng';
+        const subName = viewMode === 'subject' ? subjects.find(s => s.id === selectedSubId)?.name : (viewMode === 'competency' ? 'Năng lực' : (viewMode === 'quality' ? 'Phẩm chất' : 'Năng lực đặc thù'));
+
+        let worksheetData = [
+          ["BẢNG NHẬN XÉT ĐÁNH GIÁ HỌC SINH"],
+          [`Lớp: ${className} - ${monthName}`],
+          [`Nội dung: ${subName}`],
+          [""]
+        ];
+
+        if (viewMode === 'specific') {
+          const header = ["STT", "HỌ VÀ TÊN", ...SPECIFIC_COMPETENCIES.map(c => c.name), "NHẬN XÉT CHI TIẾT"];
+          worksheetData.push(header);
+
+          students.forEach((s, i) => {
+            const d = studentData[s.id] || {};
+            const row = [
+              i + 1,
+              s.name.toUpperCase(),
+              ...SPECIFIC_COMPETENCIES.map(c => d[`level_${c.id}`] || ""),
+              d.comment || ""
+            ];
+            worksheetData.push(row);
+          });
+        } else {
+          const header = ["STT", "HỌ VÀ TÊN", "MỨC ĐẠT", "NHẬN XÉT CHI TIẾT"];
+          worksheetData.push(header);
+
+          students.forEach((s, i) => {
+            const d = studentData[s.id] || {};
+            const row = [
+              i + 1,
+              s.name.toUpperCase(),
+              d.level || "",
+              d.comment || ""
+            ];
+            worksheetData.push(row);
+          });
+        }
+
+        const wb = window.XLSX.utils.book_new();
+        const ws = window.XLSX.utils.aoa_to_sheet(worksheetData);
+
+        const cols = [{ wch: 5 }, { wch: 25 }];
+        if (viewMode === 'specific') {
+          SPECIFIC_COMPETENCIES.forEach(() => cols.push({ wch: 10 }));
+          cols.push({ wch: 80 });
+        } else {
+          cols.push({ wch: 10 }, { wch: 80 });
+        }
+        ws['!cols'] = cols;
+
+        window.XLSX.utils.book_append_sheet(wb, ws, "NhanXet");
+        window.XLSX.writeFile(wb, `NhanXet_${className}_${monthName}.xlsx`);
+      };
+
+      // Save settings from the settings panel: nothing special, keys auto-saved to localStorage
+      const saveSettingsKeys = () => {
+        setSettingsOpen(false);
+      };
+
+      // SectionBox subcomponent (keeps layout & behavior)
+      const SectionBox = ({ label, items, selectedId, onSelect, type, icon: Icon }) => (
+        <div className="bg-white p-4 rounded-xl border-2 border-slate-300 shadow-sm flex flex-col gap-2">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[11px] font-black text-slate-600 uppercase flex items-center gap-1.5"><Icon size={12}/> {label}</span>
+            <div className="flex gap-1">
+              {selectedId && (
+                <>
+                  <button onClick={() => { const item = items.find(i => i.id === selectedId); setEditItem(item); setInputValue(item.name); setModalType(type); }} className="p-1 text-blue-500 hover:bg-blue-50 rounded"><Edit2 size={12}/></button>
+                  <button onClick={() => { const item = items.find(i => i.id === selectedId); setConfirmDelete({ type, id: item.id, name: item.name }); }} className="p-1 hover:text-red-600"><Trash2 size={12}/></button>
+                </>
+              )}
+              <button onClick={() => { setEditItem(null); setInputValue(''); setModalType(type); }} className="p-1 text-indigo-500"><Plus size={14}/></button>
+            </div>
+          </div>
+          <select value={selectedId || ''} onChange={(e) => onSelect(e.target.value)} className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none">
+            <option value="">-- Chọn --</option>
+            {items.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+          </select>
+        </div>
+      );
+
+      if (!isAuthValid) return <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 text-white font-black">LỖI XÁC THỰC BẢN QUYỀN</div>;
+
+      return (
+        <div className="min-h-screen bg-[#F8FAFC] text-slate-900 pb-12 font-sans text-left flex flex-col">
+          <header className="bg-indigo-900 text-white p-6 shadow-xl border-b-4 border-indigo-700">
+            <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center w-full gap-4">
+              <div className="flex items-center gap-4">
+                <div className="p-2 bg-white/20 rounded-xl"><GraduationCap size={32}/></div>
+                <div className="flex flex-col">
+                  <h1 className="text-xl font-black uppercase leading-none">ĐÁNH GIÁ THƯỜNG XUYÊN</h1>
+                  <span className="text-indigo-300 text-[11px] font-bold uppercase mt-1 italic">TIỂU HỌC KHÁNH BÌNH - DẪN LỐI TƯƠNG LAI</span>
+                </div>
+              </div>
+
+              {/* Right side: view mode + settings */}
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <div className="flex bg-indigo-950/50 p-1 rounded-xl gap-1">
+                     {['subject', 'competency', 'quality', 'specific'].map(m => (
+                       <button key={m} onClick={() => setViewMode(m)} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${viewMode === m ? 'bg-indigo-600 text-white shadow-lg' : 'text-indigo-300 hover:text-white'}`}>
+                         {m === 'specific' ? 'NL Đặc thù' : (m === 'subject' ? 'Môn học' : (m === 'competency' ? 'Năng lực' : 'Phẩm chất'))}
+                       </button>
+                     ))}
+                  </div>
+
+                  {/* Settings popover, anchored to the right of the viewMode buttons */}
+                  {settingsOpen && (
+                    <div className="absolute right-0 mt-3 w-96 bg-white text-slate-800 rounded-2xl shadow-2xl p-4 z-50 border border-slate-200">
+                      <h4 className="font-black text-sm uppercase text-slate-600 mb-3 flex items-center gap-2"><Settings size={14}/> Cài đặt API Studio (5 keys)</h4>
+
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-[11px] text-slate-500 font-black uppercase">Key 1</label>
+                          <div className="flex items-center gap-2 mt-1">
+                            <input type={showKey1 ? 'text' : 'password'} value={gApiKey1} onChange={e => setGApiKey1(e.target.value)} placeholder="API Key 1" className="w-full p-2 bg-slate-50 border rounded-lg text-sm outline-none"/>
+                            <button onClick={() => setShowKey1(!showKey1)} className="p-2 bg-white border rounded-lg text-sm">{showKey1 ? <EyeOff size={14}/> : <Eye size={14}/>}</button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] text-slate-500 font-black uppercase">Key 2</label>
+                          <div className="flex items-center gap-2 mt-1">
+                            <input type={showKey2 ? 'text' : 'password'} value={gApiKey2} onChange={e => setGApiKey2(e.target.value)} placeholder="API Key 2" className="w-full p-2 bg-slate-50 border rounded-lg text-sm outline-none"/>
+                            <button onClick={() => setShowKey2(!showKey2)} className="p-2 bg-white border rounded-lg text-sm">{showKey2 ? <EyeOff size={14}/> : <Eye size={14}/>}</button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] text-slate-500 font-black uppercase">Key 3</label>
+                          <div className="flex items-center gap-2 mt-1">
+                            <input type={showKey3 ? 'text' : 'password'} value={gApiKey3} onChange={e => setGApiKey3(e.target.value)} placeholder="API Key 3" className="w-full p-2 bg-slate-50 border rounded-lg text-sm outline-none"/>
+                            <button onClick={() => setShowKey3(!showKey3)} className="p-2 bg-white border rounded-lg text-sm">{showKey3 ? <EyeOff size={14}/> : <Eye size={14}/>}</button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] text-slate-500 font-black uppercase">Key 4</label>
+                          <div className="flex items-center gap-2 mt-1">
+                            <input type={showKey4 ? 'text' : 'password'} value={gApiKey4} onChange={e => setGApiKey4(e.target.value)} placeholder="API Key 4" className="w-full p-2 bg-slate-50 border rounded-lg text-sm outline-none"/>
+                            <button onClick={() => setShowKey4(!showKey4)} className="p-2 bg-white border rounded-lg text-sm">{showKey4 ? <EyeOff size={14}/> : <Eye size={14}/>}</button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] text-slate-500 font-black uppercase">Key 5</label>
+                          <div className="flex items-center gap-2 mt-1">
+                            <input type={showKey5 ? 'text' : 'password'} value={gApiKey5} onChange={e => setGApiKey5(e.target.value)} placeholder="API Key 5" className="w-full p-2 bg-slate-50 border rounded-lg text-sm outline-none"/>
+                            <button onClick={() => setShowKey5(!showKey5)} className="p-2 bg-white border rounded-lg text-sm">{showKey5 ? <EyeOff size={14}/> : <Eye size={14}/>}</button>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 mt-2">
+                          <button onClick={() => { setSettingsOpen(false); }} className="flex-1 py-2 border rounded-lg font-black text-slate-600 text-[12px]">Hủy</button>
+                          <button onClick={() => saveSettingsKeys()} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg font-black text-[12px]">Lưu & Đóng</button>
+                        </div>
+                        <p className="text-[11px] text-slate-400">Ứng dụng sẽ xoay vòng giữa các key (tối đa 5) khi có key gặp lỗi. Điền ít nhất 1 key.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Settings button */}
+                <div className="relative">
+                  <button onClick={() => setSettingsOpen(!settingsOpen)} title="Cài đặt API Studio" className="p-3 bg-white/10 hover:bg-white/20 rounded-xl text-white flex items-center gap-2">
+                    <Settings size={18} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <div className="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <SectionBox label="Năm học" icon={Calendar} items={years} selectedId={selectedYearId} onSelect={setSelectedYearId} type="year" />
+            <SectionBox label="Lớp học" icon={LayoutGrid} items={classes} selectedId={selectedClassId} onSelect={setSelectedClassId} type="class" />
+            <SectionBox label="Tháng" icon={Calendar} items={months} selectedId={selectedMonthId} onSelect={setSelectedMonthId} type="month" />
+            {viewMode === 'subject' ? <SectionBox label="Môn học" icon={BookOpen} items={subjects} selectedId={selectedSubId} onSelect={setSelectedSubId} type="subject" /> : <div className="bg-indigo-50 p-4 rounded-xl border-2 border-indigo-200 shadow-sm flex items-center justify-center font-black text-indigo-700 text-[10px] uppercase gap-2">{viewMode === 'specific' ? <Star size={14}/> : <User size={14}/>} {viewMode.toUpperCase()}</div>}
+          </div>
+
+          <main className="max-w-7xl mx-auto px-4 md:px-6 flex-1">
+            {selectedYearId && selectedClassId && selectedMonthId && (viewMode !== 'subject' || selectedSubId) ? (
+              <div className="space-y-6">
+                <div className="bg-white rounded-2xl p-6 border-2 border-slate-300 shadow-sm flex flex-col gap-4">
+                  <div className="flex flex-col md:flex-row gap-4 items-end">
+                    <div className="flex-1 w-full text-left">
+                      <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block">Lưu ý chung của GV (AI nghe theo)</label>
+                      <div className="relative">
+                        <Sparkles size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-400"/>
+                        <input className="w-full bg-slate-50 border-2 border-slate-300 rounded-xl pl-12 pr-4 py-4 text-sm font-semibold outline-none" placeholder="VD: Nhấn mạnh tính tự giác..." value={aiPrompt} onChange={e => setAiPrompt(e.target.value)}/>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2">
+                        <button onClick={runAI} disabled={isGenerating || students.length === 0} className="px-8 py-4 bg-indigo-600 text-white rounded-xl font-black text-xs hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2 uppercase shadow-lg">
+                          {isGenerating ? <Loader2 className="animate-spin" size={18}/> : <Wand2 size={18}/>} Nhận xét AI
+                        </button>
+                        <button onClick={() => { setEditItem(null); setBulkInput(''); setModalType('student'); }} className="p-4 bg-slate-800 text-white rounded-xl shadow-lg hover:bg-black"><UserPlus size={20}/></button>
+                      </div>
+
+                      {/* Removed the previous inline API key input and the small muted hint near the note input as requested. */}
+                      <div className="w-full">
+                        {/* Intentionally left blank (no small hint text) */}
+                        {apiError && (
+                          <div className="mt-3 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+                            <strong className="font-black uppercase text-xs">Lỗi API:</strong> <span className="ml-2">{apiError}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between pt-2 border-t border-slate-100 gap-3">
+                    <div className="flex gap-2">
+                      <button onClick={() => setShowLevel(!showLevel)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all border ${showLevel ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-400 border-slate-200'}`}>
+                        {showLevel ? <EyeOff size={14}/> : <Eye size={14}/>} {showLevel ? 'Ẩn mức đạt' : 'Hiện mức đạt'}
+                      </button>
+                      <button onClick={() => setShowNote(!showNote)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all border ${showNote ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-400 border-slate-200'}`}>
+                        {showNote ? <EyeOff size={14}/> : <Eye size={14}/>} {showNote ? 'Ẩn ghi chú' : 'Hiện ghi chú'}
+                      </button>
+                    </div>
+                    <button onClick={exportExcel} disabled={students.length === 0} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-[10px] font-black uppercase hover:bg-emerald-700 shadow-md transition-all disabled:opacity-50">
+                      <Download size={14}/> Tải Excel
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border-2 border-slate-400 shadow-2xl overflow-hidden mb-8">
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse min-w-[1200px]">
+                      <thead>
+                        <tr className="bg-slate-200 border-b-2 border-slate-400">
+                          <th className="p-4 text-center text-[10px] font-black uppercase w-12 border-r border-slate-400 sticky left-0 bg-slate-200 z-10">STT</th>
+                          <th className="p-4 text-center text-[10px] font-black uppercase w-48 border-r border-slate-400 sticky left-12 bg-slate-200 z-10">Học sinh</th>
+                          {viewMode === 'specific' ? (showLevel && SPECIFIC_COMPETENCIES.map(c => <th key={c.id} className="p-4 text-center text-[9px] font-black uppercase border-r border-slate-400 w-24">{c.name}</th>)) : (showLevel && <th className="p-4 text-center text-[10px] font-black uppercase w-32 border-r border-slate-400">Mức</th>)}
+                          {showNote && <th className="p-4 text-center text-[10px] font-black uppercase w-48 border-r border-slate-400">Ghi chú</th>}
+                          <th className={`p-4 text-center text-[10px] font-black uppercase ${viewMode === 'specific' ? 'min-w-[400px]' : ''}`}>Nhận xét chi tiết</th>
+                          <th className="p-4 w-24 text-center text-[10px] font-black uppercase">Gửi</th>
+                          <th className="p-4 w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y-2 divide-slate-300">
+                        {students.map((stu, idx) => (
+                          <tr key={stu.id} className="hover:bg-indigo-50/50 transition-all">
+                            <td className="p-3 text-center text-xs font-bold text-slate-400 border-r border-slate-400 sticky left-0 bg-slate-50">{idx + 1}</td>
+                            <td className="p-3 border-r border-slate-400 text-left sticky left-12 bg-white z-0"><span className="font-black text-slate-800 text-sm uppercase">{stu.name}</span></td>
+                            {viewMode === 'specific' ? (showLevel && SPECIFIC_COMPETENCIES.map(c => (
+                              <td key={c.id} className="p-1 border-r border-slate-400">
+                                <div className="flex justify-center gap-0.5">
+                                  {['T', 'Đ', 'C'].map(lv => (
+                                    <button key={lv} onClick={() => updateCell(stu.id, `level_${c.id}`, lv)} className={`w-6 h-6 rounded font-black text-[9px] ${studentData[stu.id]?.[`level_${c.id}`] === lv ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-400'}`}>{lv}</button>
+                                  ))}
+                                </div>
+                              </td>
+                            ))) : (showLevel && (
+                              <td className="p-3 border-r border-slate-400">
+                                <div className="flex justify-center gap-1">
+                                  {(viewMode === 'subject' ? ['T', 'H', 'C'] : ['T', 'Đ', 'C']).map(lv => (
+                                    <button key={lv} onClick={() => updateCell(stu.id, 'level', lv)} className={`w-8 h-8 rounded-lg font-black text-[10px] ${studentData[stu.id]?.level === lv ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-100 text-slate-400'}`}>{lv}</button>
+                                  ))}
+                                </div>
+                              </td>
+                            ))}
+                            {showNote && <td className="p-3 border-r border-slate-400"><EditableCell value={studentData[stu.id]?.note} onSave={(val) => updateCell(stu.id, 'note', val)} className="w-full bg-transparent text-xs font-bold text-indigo-700 outline-none text-left" /></td>}
+                            <td className="p-3 text-left"><EditableCell value={studentData[stu.id]?.comment} onSave={(val) => updateCell(stu.id, 'comment', val)} className="w-full bg-transparent text-sm font-medium border-none outline-none text-slate-700 text-left leading-relaxed" /></td>
+                            <td className="p-3 text-center border-l border-slate-200"><button disabled={!studentData[stu.id]?.comment} onClick={() => handleSendZalo(stu.id)} className={`p-2.5 rounded-full mx-auto shadow-sm ${copySuccess === stu.id ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white disabled:opacity-30'}`}>{copySuccess === stu.id ? <CheckCircle2 size={18} /> : <ZaloIcon size={18} />}</button></td>
+                            <td className="p-3 text-center"><button onClick={() => setConfirmDelete({ type: 'student', id: stu.id, name: stu.name })} className="text-slate-300 hover:text-red-500"><Trash2 size={14}/></button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            ) : <div className="py-24 text-center bg-white rounded-3xl border-2 border-dashed border-slate-400 font-black text-slate-400 uppercase">Chọn thông tin lớp học</div>}
+          </main>
+
+          <footer className="max-w-7xl mx-auto w-full px-6 py-4 mt-8 bg-white/80 rounded-t-3xl border-t border-slate-200">
+            <div className="flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                <div className="text-left italic">{AUTHOR_NAME} • {AUTHOR_PHONE}</div>
+                <div className="text-right">Hệ thống Đánh giá TH Khánh Bình © {new Date().getFullYear()}</div>
+            </div>
+          </footer>
+
+          {modalType && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
+              <div className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl text-left">
+                <h3 className="text-xl font-black uppercase text-slate-800 mb-6">{editItem ? "Sửa" : "Thêm mới"}</h3>
+                {modalType === 'student' ? <textarea autoFocus className="w-full h-64 p-4 bg-slate-50 border-2 border-slate-300 rounded-xl mb-6 text-left font-bold outline-none" placeholder="Dán danh sách học sinh..." value={bulkInput} onChange={e => setBulkInput(e.target.value)}/> : <input autoFocus className="w-full p-4 bg-slate-50 border-2 border-slate-300 rounded-xl font-bold mb-6 text-left outline-none" value={inputValue} onChange={e => setInputValue(e.target.value)}/>}
+                <div className="flex gap-4"><button onClick={() => setModalType(null)} className="flex-1 py-4 font-black text-slate-400 uppercase text-[10px]">Hủy</button><button onClick={() => modalType === 'student' ? (async () => {
+                  if (!bulkInput.trim()) return;
+                  const names = bulkInput.split('\n').map(n => n.trim()).filter(n => n !== '');
+                  const col = colStudents(selectedYearId, selectedClassId);
+                  for (const name of names) await col.add({ name, createdAt: Date.now() });
+                  setBulkInput(''); setModalType(null);
+                })() : (async () => {
+                  if (!inputValue.trim()) return;
+                  const colName = modalType === 'year' ? 'years' : modalType === 'class' ? 'classes' : modalType === 'month' ? 'months' : 'subjects';
+                  if (editItem) {
+                    await rootArtifacts().collection(colName).doc(editItem.id).update({ name: inputValue });
+                  } else {
+                    await rootArtifacts().collection(colName).add({ name: inputValue, createdAt: Date.now() });
+                  }
+                  setInputValue(''); setModalType(null);
+                })()} className="flex-[2] py-4 bg-indigo-600 text-white font-black rounded-xl uppercase text-[10px]">Lưu</button></div>
+              </div>
+            </div>
+          )}
+
+          {confirmDelete && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm">
+              <div className="bg-white w-full max-w-sm rounded-3xl p-8 text-center shadow-2xl">
+                <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4"><ShieldAlert size={32} /></div>
+                <h3 className="text-lg font-black mb-2 uppercase">Xác nhận xóa</h3>
+                <p className="text-slate-500 text-sm mb-6">Xóa <span className="text-red-600 font-bold">"{confirmDelete.name}"</span>?</p>
+                <div className="flex gap-4"><button onClick={() => setConfirmDelete(null)} className="flex-1 py-4 font-black text-slate-400 uppercase text-[10px]">Hủy</button><button onClick={async () => {
+                  if (confirmDelete.type === 'student') {
+                    await colStudents(selectedYearId, selectedClassId).doc(confirmDelete.id).delete();
+                  } else {
+                    const collectionName = confirmDelete.type === 'year' ? 'years' : confirmDelete.type === 'class' ? 'classes' : confirmDelete.type === 'month' ? 'months' : 'subjects';
+                    await rootArtifacts().collection(collectionName).doc(confirmDelete.id).delete();
+                  }
+                  setConfirmDelete(null);
+                }} className="flex-1 py-4 bg-red-600 text-white font-black rounded-xl uppercase text-[10px]">Xóa</button></div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    // Render to #root
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+  </script>
+</body>
+</html>
