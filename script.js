@@ -598,7 +598,7 @@ function loginGoogle() {
           const systemPrompt = `Bạn là GV Tiểu học Việt Nam. Hãy viết nhận xét học sinh theo định dạng JSON.
       QUY TẮC CHUNG:
       - Ngôn ngữ: Tiếng Việt, gần gũi, khích lệ. 
-      - Cấu trúc: Bắt đầu bằng 'Em...'. Dài khoảng 50-60 từ.
+      - Cấu trúc: Bắt đầu bằng 'Em...'. Dài theo yêu cầu của giáo viên.
       - Bắt buộc câu nhận xét của mỗi học sinh đều khác nhau.
       - Tuyệt đối không nêu lại tên của học sinh.
       - KHÔNG dùng từ 'Hoàn thành tốt' cho học sinh ở mức Đạt (Đ) hoặc Hoàn thành (H).
@@ -1144,4 +1144,5 @@ if (!user) {
 
 
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
 
