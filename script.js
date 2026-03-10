@@ -1023,6 +1023,7 @@ if (!user) {
             <div className="flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
                 <div className="text-left">{AUTHOR_NAME} • {AUTHOR_PHONE}</div>
                 <div className="text-right">🛡️© {new Date().getFullYear()}.thkb. All rights reserved.</div>
+                <div className="text-center text-[11px] text-gray-400 mt-1">⚠️ AI có thể nhận xét chưa chính xác. Vui lòng kiểm tra lại thông tin.
             </div>
           </footer>
 
@@ -1144,6 +1145,7 @@ if (!user) {
 
 
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
 
 
 
