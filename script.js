@@ -859,7 +859,7 @@ if (!user) {
                 <div className="p-2 bg-white/20 rounded-xl"><GraduationCap size={32}/></div>
                 <div className="flex flex-col">
                   <h1 className="text-xl font-black uppercase leading-none">ĐÁNH GIÁ THƯỜNG XUYÊN</h1>
-                  <span className="text-indigo-300 text-[12px] font-bold uppercase mt-1 italic">TIỂU HỌC KHÁNH BÌNH - DẪN LỐI TƯƠNG LAI</span>
+                  <span className="text-indigo-300 text-[12px] font-bold uppercase mt-1 italic">TRƯỜNG TIỂU HỌC KHÁNH BÌNH - DẪN LỐI TƯƠNG LAI</span>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -1144,4 +1144,5 @@ if (!user) {
 
 
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
 
