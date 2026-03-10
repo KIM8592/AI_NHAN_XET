@@ -1022,7 +1022,7 @@ if (!user) {
           <footer className="max-w-7xl mx-auto w-full px-6 py-4 mt-8 bg-white/80 rounded-t-3xl border-t border-slate-200">
             <div className="flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
                 <div className="text-left">{AUTHOR_NAME} • {AUTHOR_PHONE}</div>
-                <div className="text-right">🛡️© {new Date().getFullYear()}.thkb. All rights reserved.</div>
+                <div className="text-right">© {new Date().getFullYear()}.thkb. All rights reserved.</div>
             </div>
           </footer>
 
@@ -1144,5 +1144,6 @@ if (!user) {
 
 
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
 
 
