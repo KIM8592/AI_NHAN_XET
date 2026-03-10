@@ -15,7 +15,7 @@ const { useState, useEffect, useRef } = React;
           GraduationCap = makeEmojiIcon('🎓'), Edit2 = makeEmojiIcon('✏️'), Eye = makeEmojiIcon('👁️'),
           EyeOff = makeEmojiIcon('🙈'), Download = makeEmojiIcon('⬇️'), ShieldAlert = makeEmojiIcon('🛡️'),
           CheckCircle2 = makeEmojiIcon('✅'), User = makeEmojiIcon('👤'), Star = makeEmojiIcon('⭐'),
-          Settings = makeEmojiIcon('⚙️'), Mic = makeEmojiIcon('🎤');
+          Settings = makeEmojiIcon('⚙️'), Mic = makeEmojiIcon('🎙');
 
     // Firebase config (kept)
     const myFirebaseConfig = {
@@ -1144,6 +1144,7 @@ if (!user) {
 
 
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
 
 
 
