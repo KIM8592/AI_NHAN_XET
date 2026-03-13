@@ -11,7 +11,7 @@ const { useState, useEffect, useRef } = React;
     // Emoji icon components requested
     const Plus = makeEmojiIcon('➕'), Trash2 = makeEmojiIcon('🗑️'), LayoutGrid = makeEmojiIcon('🧩'),
           Calendar = makeEmojiIcon('📅'), BookOpen = makeEmojiIcon('📖'), UserPlus = makeEmojiIcon('👤➕'),
-          Sparkles = makeEmojiIcon('✨'), Loader2 = makeEmojiIcon('⏳'), Wand2 = makeEmojiIcon('🪄'),
+          Sparkles = makeEmojiIcon('✨'), Loader2 = makeEmojiIcon('⏳'), Wand2 = makeEmojiIcon('🤖'),
           GraduationCap = makeEmojiIcon('🎓'), Edit2 = makeEmojiIcon('✏️'), Eye = makeEmojiIcon('👁️'),
           EyeOff = makeEmojiIcon('🙈'), Download = makeEmojiIcon('⬇️'), ShieldAlert = makeEmojiIcon('🛡️'),
           CheckCircle2 = makeEmojiIcon('✅'), User = makeEmojiIcon('👤'), Star = makeEmojiIcon('⭐'),
@@ -1144,6 +1144,7 @@ if (!user) {
 
 
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
 
 
 
