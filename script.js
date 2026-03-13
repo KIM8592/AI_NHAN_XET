@@ -909,7 +909,7 @@ if (!user) {
                     </div>
                     <div className="flex gap-2">
                       <button onClick={runBulkAI} disabled={isGenerating || students.length === 0} className="px-8 py-4 bg-indigo-600 text-white rounded-xl font-black text-xs hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2 uppercase shadow-lg">
-                        {isGenerating ? <Loader2 size={18} className="spin" /> : <Wand2 size={18} />} Nhận xét cả lớp
+                        {isGenerating ? <Loader2 size={18} className="spin" /> : <Wand2 size={18} />} AI nhận xét
                       </button>
                       <button onClick={() => { setEditItem(null); setBulkInput(''); setModalType('student'); }} className="p-4 bg-slate-800 text-white rounded-xl shadow-lg hover:bg-black"><UserPlus size={20}/></button>
                     </div>
@@ -1144,6 +1144,7 @@ if (!user) {
 
 
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
 
 
 
