@@ -1088,7 +1088,7 @@ if (!user) {
 
                 {apiKeyMissingNote && (
                   <div className="mb-3 p-3 bg-yellow-50 border-l-4 border-yellow-400 text-sm text-slate-800">
-                    Bạn chưa nhập Mã khóa. Vui lòng nhập Mã khóa để sử dụng chức năng "Nhận xét cả lớp".<br/>
+                    Bạn chưa nhập Mã khóa. Vui lòng nhập Mã khóa để sử dụng chức năng "AI nhận xét".<br/>
                     Nếu cần hỗ trợ, liên hệ Thầy Kim — ĐT: <span className="font-black">0964567806</span>
                   </div>
                 )}
@@ -1144,6 +1144,7 @@ if (!user) {
 
 
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
 
 
 
